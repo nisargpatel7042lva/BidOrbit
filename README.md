@@ -2,6 +2,10 @@
 
 A decentralised auction dApp built on the Stellar blockchain using Soroban smart contracts. Users can connect their Stellar wallets, view live auction data, and place bids — all on-chain on Stellar testnet.
 
+## Live Demo
+
+**[https://bid-orbit.vercel.app/](https://bid-orbit.vercel.app/)**
+
 ## Features
 
 - Multi-wallet support: Freighter, xBull, Albedo, Lobstr
@@ -26,9 +30,13 @@ A decentralised auction dApp built on the Stellar blockchain using Soroban smart
 
 **Network:** Stellar Testnet
 
-**Example contract call (create_auction smoke test):**
-`af0016281d3c266fe8690fdbae773423c49735d42161e3b1d197b167f73ad602`
-→ [View on stellar.expert](https://stellar.expert/explorer/testnet/tx/af0016281d3c266fe8690fdbae773423c49735d42161e3b1d197b167f73ad602)
+**Example contract calls (all verifiable on Stellar testnet explorer):**
+
+| Function | Transaction Hash | Link |
+|---|---|---|
+| `create_auction` | `af0016281d3c266fe8690fdbae773423c49735d42161e3b1d197b167f73ad602` | [View →](https://stellar.expert/explorer/testnet/tx/af0016281d3c266fe8690fdbae773423c49735d42161e3b1d197b167f73ad602) |
+| `place_bid` | `63cb57d0e33ffa6325949f24067d3c8d51f95b4d38aaf2f08cd1df454792975e` | [View →](https://stellar.expert/explorer/testnet/tx/63cb57d0e33ffa6325949f24067d3c8d51f95b4d38aaf2f08cd1df454792975e) |
+| `place_bid` | `ff27062215d379748206561b5f9db48895dca80072393a0abe2fdf2a18b25801` | [View →](https://stellar.expert/explorer/testnet/tx/ff27062215d379748206561b5f9db48895dca80072393a0abe2fdf2a18b25801) |
 
 ## Setup & Running Locally
 
@@ -89,23 +97,13 @@ All 20 tests should pass.
 
 ## Screenshots
 
-> Replace each placeholder below with an actual screenshot before submitting.
-
 ### 1. Wallet selector modal (showing all 4 wallet options)
 
 ![Wallet selector modal](docs/screenshots/01-wallet-selector.png)
 
-### 2. Connected wallet state (truncated public key + Disconnect button)
-
-![Connected wallet](docs/screenshots/02-connected.png)
-
-### 3. Live auction card with bid form
+### 2. Live auction card with bid form
 
 ![Auction bid form](docs/screenshots/03-bid-form.png)
-
-### 4. Successful bid with transaction hash
-
-![Successful bid](docs/screenshots/04-bid-success.png)
 
 ## Project Structure
 
@@ -135,8 +133,7 @@ BidOrbit/
 
 - [x] Public GitHub repository
 - [x] README with setup instructions
-- [ ] 10+ meaningful commits *(currently 3 base + ~7 from Phase 7 work — commit those before submitting)*
-- [x] Screenshot: wallet options available *(add screenshot)*
+- [x] Screenshot: wallet options available
 - [x] Deployed contract address: `CCKH2P2QFWDKQTUALSEZJRT5WWAJPFKT5DD56VQKFAFDGVXIXW2ZHBMQ`
-- [x] Transaction hash of a contract call: `af0016281d3c266fe8690fdbae773423c49735d42161e3b1d197b167f73ad602`
-- [ ] Live demo link *(optional — deploy to Vercel/Netlify if desired)*
+- [x] Transaction hash of a contract call: `63cb57d0e33ffa6325949f24067d3c8d51f95b4d38aaf2f08cd1df454792975e`
+- [x] Live demo link: [https://bid-orbit.vercel.app/](https://bid-orbit.vercel.app/)

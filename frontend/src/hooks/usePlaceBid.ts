@@ -48,13 +48,13 @@ export function usePlaceBid(auctionId: bigint, onSuccess?: () => void) {
   const [status, setStatus] = useState<BidStatus>({ phase: 'idle' })
 
   const placeBid = useCallback(
-    async (amount: bigint) => {
+    async (amount: bigint, tokenAddress: string) => {
       if (!address) return
 
       setStatus({ phase: 'building' })
       try {
         // 1. Build + simulate the transaction (gets footprint and auth requirements)
-        const assembled = await buildPlaceBidTx(address, auctionId, amount)
+        const assembled = await buildPlaceBidTx(address, auctionId, amount, tokenAddress)
 
         // 2. Hand XDR to wallet for signing
         setStatus({ phase: 'signing' })

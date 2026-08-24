@@ -32,7 +32,8 @@ export function BidForm() {
     if (!xlm || xlm <= 0) { setValidationError('ENTER A VALID AMOUNT'); return }
     const stroops = BigInt(Math.round(xlm * 10_000_000))
     if (stroops < minBid) { setValidationError(`MINIMUM: ${fmtXlm(minBid)} XLM`); return }
-    placeBid(stroops)
+    if (!state) return
+    placeBid(stroops, state.token)
     setInput('')
   }
 

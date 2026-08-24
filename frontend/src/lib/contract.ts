@@ -78,7 +78,12 @@ export async function getAuctionState(auctionId: bigint): Promise<AuctionState> 
   return scValToNative(retval) as AuctionState
 }
 
-export async function buildPlaceBidTx(publicKey: string, auctionId: bigint, amount: bigint) {
+export async function buildPlaceBidTx(
+  publicKey: string,
+  auctionId: bigint,
+  amount: bigint,
+  tokenAddress: string,
+) {
   // Fetch real account sequence via Horizon REST (pure JSON, no XDR parsing).
   const horizonRes = await fetch(`${HORIZON_URL}/accounts/${publicKey}`)
   if (!horizonRes.ok) throw new Error('Could not load account. Is this account funded on testnet?')
@@ -107,21 +112,24 @@ export async function buildPlaceBidTx(publicKey: string, auctionId: bigint, amou
   const sim = await rpcPost('simulateTransaction', { transaction: tx.toXDR() })
   if (sim.error) throw new Error(sim.error)
 
-  // Rebuild with real fee + soroban footprint.
-  // TransactionBuilder.setSorobanData accepts a raw base64 string —
-  // no XDR object parsing needed in the browser.
   const minFee = parseInt(sim.minResourceFee ?? '0', 10) + 100
 
-  // The contract calls bidder.require_auth() and tok.transfer(&bidder, …).
-  // The simulation returns the required SorobanAuthorizationEntries in sim.auth.
-  // We must attach them to the operation — without them the contract's auth
-  // checks fail on-chain even though the tx envelope is signed.
-  const authEntries: xdr.SorobanAuthorizationEntry[] = (sim.auth ?? []).map(
+  // The Soroban simulation runs in permissive (recording) auth mode and returns
+  // zero auth entries when bidder == tx source. On-chain execution is stricter:
+  // the cross-contract call tok.transfer(&bidder, …) requires an explicit
+  // SorobanAuthorizationEntry or require_auth() panics → invokeHostFunctionTrapped.
+  //
+  // We use sourceAccount credentials — the wallet's tx envelope signature covers
+  // this automatically, so no separate auth-entry signing step is needed.
+  const simAuthEntries: xdr.SorobanAuthorizationEntry[] = (sim.auth ?? []).map(
     (a: string) => xdr.SorobanAuthorizationEntry.fromXDR(a, 'base64'),
   )
+  const authEntries =
+    simAuthEntries.length > 0
+      ? simAuthEntries
+      : [makeSourceAccountAuth(publicKey, auctionId, amount, tokenAddress)]
 
-  // Fresh Account — TransactionBuilder.build() mutates the account's sequence,
-  // so the first build() already incremented it. We need the original sequence here.
+  // Fresh Account — TransactionBuilder.build() mutates the account's sequence.
   const account2 = new Account(publicKey, sequence)
   return new TransactionBuilder(account2, {
     fee: String(minFee),
@@ -142,6 +150,46 @@ export async function buildPlaceBidTx(publicKey: string, auctionId: bigint, amou
     .setSorobanData(sim.transactionData)
     .setTimeout(30)
     .build()
+}
+
+function makeSourceAccountAuth(
+  publicKey: string,
+  auctionId: bigint,
+  amount: bigint,
+  tokenAddress: string,
+): xdr.SorobanAuthorizationEntry {
+  return new xdr.SorobanAuthorizationEntry({
+    credentials: xdr.SorobanCredentials.sorobanCredentialsSourceAccount(),
+    rootInvocation: new xdr.SorobanAuthorizedInvocation({
+      function: xdr.SorobanAuthorizedFunction.sorobanAuthorizedFunctionTypeContractFn(
+        new xdr.InvokeContractArgs({
+          contractAddress: new Address(CONTRACT_ID).toScAddress(),
+          functionName: 'place_bid',
+          args: [
+            nativeToScVal(auctionId, { type: 'u64' }),
+            new Address(publicKey).toScVal(),
+            nativeToScVal(amount, { type: 'i128' }),
+          ],
+        }),
+      ),
+      subInvocations: [
+        new xdr.SorobanAuthorizedInvocation({
+          function: xdr.SorobanAuthorizedFunction.sorobanAuthorizedFunctionTypeContractFn(
+            new xdr.InvokeContractArgs({
+              contractAddress: new Address(tokenAddress).toScAddress(),
+              functionName: 'transfer',
+              args: [
+                new Address(publicKey).toScVal(),
+                new Address(CONTRACT_ID).toScVal(),
+                nativeToScVal(amount, { type: 'i128' }),
+              ],
+            }),
+          ),
+          subInvocations: [],
+        }),
+      ],
+    }),
+  })
 }
 
 export async function submitSignedTx(signedXdr: string): Promise<string> {
