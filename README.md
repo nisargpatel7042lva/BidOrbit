@@ -1,5 +1,7 @@
 # BidOrbit
 
+[![CI](https://github.com/nisargpatel7042lva/BidOrbit/actions/workflows/ci.yml/badge.svg)](https://github.com/nisargpatel7042lva/BidOrbit/actions/workflows/ci.yml)
+
 A decentralised auction dApp built on the Stellar blockchain using Soroban smart contracts. Users can connect their Stellar wallets, view live auction data, and place bids — all on-chain on Stellar testnet.
 
 ## Live Demo
