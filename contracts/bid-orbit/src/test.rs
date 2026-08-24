@@ -28,7 +28,8 @@ fn make_token<'a>(env: &'a Env) -> (Address, token::StellarAssetClient<'a>) {
     (addr, sac_client)
 }
 
-/// Creates a live auction and returns (auction_id, token_addr, token_sac).
+/// Creates a live auction (end_ledger = 200) and returns
+/// (auction_id, token_addr, token_sac).  Admin is generated internally.
 fn open_auction<'a>(
     env: &'a Env,
     client: &BidOrbitContractClient<'a>,
@@ -44,6 +45,25 @@ fn open_auction<'a>(
         &token_addr,
     );
     (auction_id, token_addr, token_sac)
+}
+
+/// Like open_auction but also returns the admin address (needed for
+/// claim/withdraw tests and the end-to-end happy path).
+fn open_auction_with_admin<'a>(
+    env: &'a Env,
+    client: &BidOrbitContractClient<'a>,
+    start_price: i128,
+) -> (Address, u64, Address, token::StellarAssetClient<'a>) {
+    let admin = Address::generate(env);
+    let (token_addr, token_sac) = make_token(env);
+    let auction_id = client.create_auction(
+        &admin,
+        &String::from_str(env, "Test Item"),
+        &start_price,
+        &200_u32,
+        &token_addr,
+    );
+    (admin, auction_id, token_addr, token_sac)
 }
 
 // ---------------------------------------------------------------------------
@@ -188,7 +208,6 @@ fn first_bid_above_start_price_succeeds() {
 
     client.place_bid(&auction_id, &bidder, &1500_i128);
 
-    // Bidder paid 1500; contract now escrows it.
     assert_eq!(tok.balance(&bidder), 3500_i128);
     assert_eq!(tok.balance(&contract_addr), 1500_i128);
 }
@@ -209,7 +228,6 @@ fn bid_below_current_highest_is_rejected() {
     token_sac.mint(&bidder2, &5000_i128);
 
     client.place_bid(&auction_id, &bidder1, &2000_i128);
-    // 1800 < 2000 — must be rejected (BidTooLow = #5).
     client.place_bid(&auction_id, &bidder2, &1800_i128);
 }
 
@@ -222,7 +240,6 @@ fn bid_equal_to_start_price_is_rejected() {
     let bidder = Address::generate(&env);
     token_sac.mint(&bidder, &5000_i128);
 
-    // 1000 == current_highest_bid (start_price) — strictly greater is required.
     client.place_bid(&auction_id, &bidder, &1000_i128);
 }
 
@@ -239,9 +256,7 @@ fn bid_after_end_ledger_is_rejected() {
     let bidder = Address::generate(&env);
     token_sac.mint(&bidder, &5000_i128);
 
-    // Advance ledger past the auction's end_ledger (200).
     env.ledger().set_sequence_number(201);
-
     client.place_bid(&auction_id, &bidder, &1500_i128);
 }
 
@@ -262,19 +277,14 @@ fn second_bidder_outbids_and_first_bidder_is_refunded() {
     let tok = token::Client::new(&env, &token_addr);
     let contract_addr = client.address.clone();
 
-    // First bid: bidder1 locks 1500 in escrow.
     client.place_bid(&auction_id, &bidder1, &1500_i128);
     assert_eq!(tok.balance(&bidder1), 3500_i128);
     assert_eq!(tok.balance(&contract_addr), 1500_i128);
 
-    // Second bid: bidder2 outbids with 2500; bidder1 gets their 1500 back.
     client.place_bid(&auction_id, &bidder2, &2500_i128);
 
-    // bidder1 refunded 1500 → net zero change from their mint.
     assert_eq!(tok.balance(&bidder1), 5000_i128);
-    // bidder2 paid 2500.
     assert_eq!(tok.balance(&bidder2), 2500_i128);
-    // Contract escrows only the winning bid.
     assert_eq!(tok.balance(&contract_addr), 2500_i128);
 }
 
@@ -299,10 +309,162 @@ fn bid_emits_event_with_correct_data() {
         amount: 1500_i128,
     };
 
-    // filter_by_contract isolates auction events from token transfer events.
-    // Array literal avoids std::vec! in a no_std crate; matches PartialEq<[ContractEvent; N]>.
     assert_eq!(
         env.events().all().filter_by_contract(&contract_addr),
         [expected.to_xdr(&env, &contract_addr)],
     );
+}
+
+// ---------------------------------------------------------------------------
+// claim_item — validation failures
+// ---------------------------------------------------------------------------
+
+#[test]
+#[should_panic(expected = "Error(Contract, #6)")]
+fn claim_before_end_ledger_fails() {
+    let (env, client) = setup();
+    let (_, auction_id, _, token_sac) = open_auction_with_admin(&env, &client, 1000_i128);
+
+    let bidder = Address::generate(&env);
+    token_sac.mint(&bidder, &5000_i128);
+    client.place_bid(&auction_id, &bidder, &1500_i128);
+
+    // Ledger is still at 100, end_ledger is 200 — not ended yet.
+    client.claim_item(&auction_id, &bidder);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #7)")]
+fn claim_by_non_winner_fails() {
+    let (env, client) = setup();
+    let (_, auction_id, _, token_sac) = open_auction_with_admin(&env, &client, 1000_i128);
+
+    let winner = Address::generate(&env);
+    let non_winner = Address::generate(&env);
+    token_sac.mint(&winner, &5000_i128);
+    client.place_bid(&auction_id, &winner, &1500_i128);
+
+    env.ledger().set_sequence_number(201);
+    client.claim_item(&auction_id, &non_winner);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #8)")]
+fn double_claim_fails() {
+    let (env, client) = setup();
+    let (_, auction_id, _, token_sac) = open_auction_with_admin(&env, &client, 1000_i128);
+
+    let bidder = Address::generate(&env);
+    token_sac.mint(&bidder, &5000_i128);
+    client.place_bid(&auction_id, &bidder, &1500_i128);
+
+    env.ledger().set_sequence_number(201);
+    client.claim_item(&auction_id, &bidder); // succeeds
+    client.claim_item(&auction_id, &bidder); // must panic AlreadyClaimed (#8)
+}
+
+// ---------------------------------------------------------------------------
+// withdraw_funds — validation failures
+// ---------------------------------------------------------------------------
+
+#[test]
+#[should_panic(expected = "Error(Contract, #6)")]
+fn withdraw_before_end_ledger_fails() {
+    let (env, client) = setup();
+    let (admin, auction_id, _, token_sac) = open_auction_with_admin(&env, &client, 1000_i128);
+
+    let bidder = Address::generate(&env);
+    token_sac.mint(&bidder, &5000_i128);
+    client.place_bid(&auction_id, &bidder, &1500_i128);
+
+    // Ledger is still at 100, end_ledger is 200 — not ended yet.
+    client.withdraw_funds(&auction_id, &admin);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #9)")]
+fn withdraw_by_non_admin_fails() {
+    let (env, client) = setup();
+    let (_, auction_id, _, token_sac) = open_auction_with_admin(&env, &client, 1000_i128);
+
+    let bidder = Address::generate(&env);
+    let impostor = Address::generate(&env);
+    token_sac.mint(&bidder, &5000_i128);
+    client.place_bid(&auction_id, &bidder, &1500_i128);
+
+    env.ledger().set_sequence_number(201);
+    client.withdraw_funds(&auction_id, &impostor);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #10)")]
+fn double_withdraw_fails() {
+    let (env, client) = setup();
+    let (admin, auction_id, _, token_sac) = open_auction_with_admin(&env, &client, 1000_i128);
+
+    let bidder = Address::generate(&env);
+    token_sac.mint(&bidder, &5000_i128);
+    client.place_bid(&auction_id, &bidder, &1500_i128);
+
+    env.ledger().set_sequence_number(201);
+    client.withdraw_funds(&auction_id, &admin); // succeeds
+    client.withdraw_funds(&auction_id, &admin); // must panic AlreadyWithdrawn (#10)
+}
+
+// ---------------------------------------------------------------------------
+// Full end-to-end happy path
+// ---------------------------------------------------------------------------
+
+#[test]
+fn full_happy_path_create_bid_outbid_end_claim_withdraw() {
+    let (env, client) = setup();
+
+    // 1. Create auction (start_price = 1000, ends at ledger 200).
+    let (admin, auction_id, token_addr, token_sac) =
+        open_auction_with_admin(&env, &client, 1000_i128);
+
+    let tok = token::Client::new(&env, &token_addr);
+    let contract_addr = client.address.clone();
+
+    let bidder1 = Address::generate(&env);
+    let bidder2 = Address::generate(&env);
+    token_sac.mint(&bidder1, &10_000_i128);
+    token_sac.mint(&bidder2, &10_000_i128);
+
+    // 2. First bid (bidder1 at 2000).
+    client.place_bid(&auction_id, &bidder1, &2000_i128);
+    assert_eq!(tok.balance(&bidder1), 8_000_i128);
+    assert_eq!(tok.balance(&contract_addr), 2_000_i128);
+
+    // 3. Second, higher bid (bidder2 at 3500) — bidder1 gets fully refunded.
+    client.place_bid(&auction_id, &bidder2, &3500_i128);
+    assert_eq!(tok.balance(&bidder1), 10_000_i128); // refunded
+    assert_eq!(tok.balance(&bidder2), 6_500_i128);
+    assert_eq!(tok.balance(&contract_addr), 3_500_i128);
+
+    // 4. Confirm state via get_auction_state.
+    let state = client.get_auction_state(&auction_id);
+    assert_eq!(state.current_highest_bid, 3_500_i128);
+    assert_eq!(state.highest_bidder, Some(bidder2.clone()));
+    assert!(!state.claimed);
+    assert!(!state.withdrawn);
+
+    // 5. Advance ledger past end_ledger (200) to close the auction.
+    env.ledger().set_sequence_number(201);
+
+    // 6. Winner claims the item.
+    client.claim_item(&auction_id, &bidder2);
+    let state = client.get_auction_state(&auction_id);
+    assert!(state.claimed);
+    assert!(!state.withdrawn);
+
+    // 7. Admin withdraws the winning bid amount.
+    let admin_balance_before = tok.balance(&admin);
+    client.withdraw_funds(&auction_id, &admin);
+    assert_eq!(tok.balance(&admin), admin_balance_before + 3_500_i128);
+    assert_eq!(tok.balance(&contract_addr), 0_i128);
+
+    let state = client.get_auction_state(&auction_id);
+    assert!(state.claimed);
+    assert!(state.withdrawn);
 }
