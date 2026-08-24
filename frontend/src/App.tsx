@@ -1,4 +1,5 @@
 import './index.css'
+import { BidForm } from './components/BidForm'
 import { WalletButton } from './components/WalletButton'
 
 export default function App() {
@@ -16,13 +17,14 @@ export default function App() {
       </header>
 
       {/* Body */}
-      <main className="mx-auto max-w-4xl px-6 py-12 text-center">
-        <h1 className="text-4xl font-bold text-gray-900">
-          Decentralised Auctions on Stellar
-        </h1>
-        <p className="mt-4 text-lg text-gray-500">
-          Connect your Stellar wallet to browse and place bids.
-        </p>
+      <main className="mx-auto max-w-4xl px-6 py-10">
+        <div className="mb-8 text-center">
+          <h1 className="text-3xl font-bold text-gray-900">Decentralised Auctions on Stellar</h1>
+          <p className="mt-2 text-gray-500">
+            Connect your Stellar wallet to view and place bids.
+          </p>
+        </div>
+        <BidForm />
       </main>
     </div>
   )
