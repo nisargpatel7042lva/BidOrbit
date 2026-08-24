@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { getSigningClient } from '../lib/contract'
+import { NETWORK_PASSPHRASE, buildPlaceBidTx, submitSignedTx } from '../lib/contract'
 import { StellarWalletsKit } from '../lib/wallet'
 import { useWallet } from './useWallet'
 
@@ -20,18 +20,10 @@ function classifyError(raw: unknown): BidStatus & { phase: 'error' } {
     /rejected by user/i.test(msg) ||
     /request was rejected/i.test(msg)
   ) {
-    return {
-      phase: 'error',
-      kind: 'user_rejected',
-      message: 'You cancelled the signing request.',
-    }
+    return { phase: 'error', kind: 'user_rejected', message: 'You cancelled the signing request.' }
   }
 
-  if (
-    msg.includes('BidTooLow') ||
-    /#5\b/.test(msg) ||
-    /bid.{0,20}too.{0,10}low/i.test(msg)
-  ) {
+  if (msg.includes('BidTooLow') || /#5\b/.test(msg) || /bid.{0,20}too.{0,10}low/i.test(msg)) {
     return {
       phase: 'error',
       kind: 'bid_too_low',
@@ -39,11 +31,7 @@ function classifyError(raw: unknown): BidStatus & { phase: 'error' } {
     }
   }
 
-  return {
-    phase: 'error',
-    kind: 'other',
-    message: msg || 'Transaction failed. Please try again.',
-  }
+  return { phase: 'error', kind: 'other', message: msg || 'Transaction failed. Please try again.' }
 }
 
 export function usePlaceBid(auctionId: bigint, onSuccess?: () => void) {
@@ -56,30 +44,21 @@ export function usePlaceBid(auctionId: bigint, onSuccess?: () => void) {
 
       setStatus({ phase: 'building' })
       try {
-        const client = await getSigningClient(address)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const tx = await (client as any).place_bid({
-          auction_id: auctionId,
-          bidder: address,
-          amount,
-        })
+        // 1. Build + simulate the transaction (gets footprint and auth requirements)
+        const assembled = await buildPlaceBidTx(address, auctionId, amount)
 
+        // 2. Hand XDR to wallet for signing
         setStatus({ phase: 'signing' })
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const sent = await (tx as any).signAndSend({
-          signTransaction: async (xdr: string, opts?: Record<string, string>) => {
-            const result = await StellarWalletsKit.signTransaction(xdr, {
-              networkPassphrase: opts?.networkPassphrase ?? opts?.network,
-              address: opts?.accountToSign ?? address,
-            })
-            // Transition to submitting only after the wallet signs successfully
-            setStatus({ phase: 'submitting' })
-            return result
-          },
+        const { signedTxXdr } = await StellarWalletsKit.signTransaction(assembled.toXDR(), {
+          networkPassphrase: NETWORK_PASSPHRASE,
+          address,
         })
 
-        setStatus({ phase: 'success', txHash: sent?.hash ?? '' })
+        // 3. Submit and poll for confirmation
+        setStatus({ phase: 'submitting' })
+        const hash = await submitSignedTx(signedTxXdr)
+
+        setStatus({ phase: 'success', txHash: hash })
         onSuccess?.()
       } catch (raw) {
         setStatus(classifyError(raw))

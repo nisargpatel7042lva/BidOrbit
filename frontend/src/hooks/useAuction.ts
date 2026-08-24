@@ -1,18 +1,8 @@
 import { scValToNative } from '@stellar/stellar-sdk'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { CONTRACT_ID, getReadClient, server } from '../lib/contract'
+import { CONTRACT_ID, type AuctionState, getAuctionState, server } from '../lib/contract'
 
-export interface AuctionState {
-  item_name: string
-  start_price: bigint
-  current_highest_bid: bigint
-  highest_bidder: string | null
-  end_ledger: number
-  admin: string
-  token: string
-  claimed: boolean
-  withdrawn: boolean
-}
+export type { AuctionState }
 
 export function useAuction(auctionId: bigint) {
   const [state, setState] = useState<AuctionState | null>(null)
@@ -23,10 +13,8 @@ export function useAuction(auctionId: bigint) {
 
   const fetchState = useCallback(async () => {
     try {
-      const client = await getReadClient()
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const tx = await (client as any).get_auction_state({ auction_id: auctionId })
-      setState(tx.result as AuctionState)
+      const data = await getAuctionState(auctionId)
+      setState(data)
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -35,7 +23,8 @@ export function useAuction(auctionId: bigint) {
     }
   }, [auctionId])
 
-  // Poll getEvents; when a BidPlaced for this auction appears, refetch state.
+  // Poll getEvents every 3s; refetch auction state when a BidPlaced for this
+  // auction appears so the UI updates live without a page refresh.
   const pollEvents = useCallback(async () => {
     try {
       const { sequence } = await server.getLatestLedger()
@@ -52,12 +41,12 @@ export function useAuction(auctionId: bigint) {
 
       const hasBidForAuction = response.events.some(event => {
         try {
+          // topics: [Symbol("BidPlaced"), u64(auction_id), Address(bidder)]
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const topics: unknown[] = (event as any).topic ?? []
           if (topics.length < 2) return false
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const rawId = topics[1] as any
-          const eventAuctionId = BigInt(scValToNative(rawId) as string | number | bigint)
+          const eventAuctionId = BigInt(scValToNative(topics[1] as any) as string | number | bigint)
           return eventAuctionId === auctionId
         } catch {
           return false

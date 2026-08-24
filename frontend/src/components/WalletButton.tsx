@@ -1,24 +1,22 @@
+import { truncate } from '../lib/format'
 import { useWallet } from '../hooks/useWallet'
 
-function truncate(addr: string): string {
-  return `${addr.slice(0, 6)}...${addr.slice(-6)}`
-}
-
 export function WalletButton() {
-  const { address, error, connecting, connect, disconnect, clearError } =
-    useWallet()
+  const { address, error, connecting, connect, disconnect, clearError } = useWallet()
 
   return (
     <div className="flex flex-col items-end gap-2">
-      {/* Error banner */}
+
+      {/* ── Error banner ── */}
       {error && (
-        <div className="flex items-start gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700 max-w-sm">
-          <span className="mt-0.5 shrink-0">⚠</span>
-          <span className="flex-1">{error}</span>
+        <div className="flex items-start gap-2 border-4 border-black bg-neo-accent neo-shadow-sm p-3 max-w-xs">
+          <span className="font-black text-sm shrink-0">⚠</span>
+          <p className="font-bold text-xs uppercase tracking-wide flex-1">{error}</p>
           <button
             onClick={clearError}
-            className="ml-2 shrink-0 text-red-400 hover:text-red-600"
-            aria-label="Dismiss error"
+            aria-label="Dismiss"
+            className="shrink-0 border-2 border-black w-5 h-5 flex items-center justify-center font-black text-xs
+                       hover:bg-black hover:text-neo-accent transition-colors duration-100"
           >
             ✕
           </button>
@@ -26,29 +24,36 @@ export function WalletButton() {
       )}
 
       {address ? (
-        /* Connected state — show truncated key + disconnect */
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1.5">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            <span className="font-mono text-sm text-emerald-800">
+        /* ── Connected ── */
+        <div className="flex items-center gap-2">
+          <div className="border-4 border-black bg-neo-yellow neo-shadow-sm px-3 py-2 flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-black animate-pulse" />
+            <span className="font-black text-xs uppercase tracking-wide font-mono">
               {truncate(address)}
             </span>
           </div>
           <button
             onClick={disconnect}
-            className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+            className="border-4 border-black bg-white px-3 py-2 text-xs font-black uppercase tracking-wide
+                       neo-shadow-sm hover:bg-black hover:text-white
+                       active:translate-x-[2px] active:translate-y-[2px] active:shadow-none
+                       transition-all duration-100"
           >
-            Disconnect
+            DISCONNECT
           </button>
         </div>
       ) : (
-        /* Disconnected state — connect button */
+        /* ── Disconnected ── */
         <button
           onClick={connect}
           disabled={connecting}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+          className="border-4 border-black bg-neo-accent px-5 py-2.5 text-sm font-black uppercase tracking-widest
+                     neo-shadow hover:bg-black hover:text-neo-accent
+                     active:translate-x-[4px] active:translate-y-[4px] active:shadow-none
+                     disabled:opacity-50 disabled:cursor-not-allowed
+                     transition-all duration-100"
         >
-          {connecting ? 'Connecting…' : 'Connect Wallet'}
+          {connecting ? 'CONNECTING…' : 'CONNECT WALLET'}
         </button>
       )}
     </div>

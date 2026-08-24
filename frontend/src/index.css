@@ -1,1 +1,60 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700;900&display=block');
 @import "tailwindcss";
+
+/* ─────────────────────────────────────────────
+   Design tokens — neo-brutalism palette
+   ───────────────────────────────────────────── */
+@theme {
+  --color-neo-bg:     #FFFDF5;
+  --color-neo-accent: #FF6B6B;
+  --color-neo-yellow: #FFD93D;
+  --color-neo-violet: #C4B5FD;
+  --font-sans: 'Space Grotesk', sans-serif;
+}
+
+/* ─────────────────────────────────────────────
+   Keyframes
+   ───────────────────────────────────────────── */
+@keyframes ticker {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+
+/* ─────────────────────────────────────────────
+   Custom utilities
+   ───────────────────────────────────────────── */
+@layer utilities {
+  /* Dot-grid canvas — the neo-brutalist page backdrop */
+  .bg-dots {
+    background-color: #FFFDF5;
+    background-image: radial-gradient(rgba(0,0,0,0.12) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* Hard offset shadows — zero blur, pure black */
+  .neo-shadow-sm  { box-shadow:  4px  4px 0 0 #000; }
+  .neo-shadow     { box-shadow:  6px  6px 0 0 #000; }
+  .neo-shadow-md  { box-shadow:  8px  8px 0 0 #000; }
+  .neo-shadow-lg  { box-shadow: 12px 12px 0 0 #000; }
+  .neo-shadow-xl  { box-shadow: 16px 16px 0 0 #000; }
+
+  /* Scrolling news ticker */
+  .animate-ticker    { animation: ticker 25s linear infinite; }
+
+  /* Slow spin for decorative elements */
+  .animate-spin-slow { animation: spin-slow 8s linear infinite; }
+}
+
+/* ─────────────────────────────────────────────
+   Respect reduced motion
+   ───────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .animate-ticker,
+  .animate-spin-slow,
+  .animate-pulse,
+  .animate-bounce { animation: none; }
+}
