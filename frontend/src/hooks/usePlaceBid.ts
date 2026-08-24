@@ -23,12 +23,21 @@ function classifyError(raw: unknown): BidStatus & { phase: 'error' } {
     return { phase: 'error', kind: 'user_rejected', message: 'You cancelled the signing request.' }
   }
 
-  if (msg.includes('BidTooLow') || /#5\b/.test(msg) || /bid.{0,20}too.{0,10}low/i.test(msg)) {
+  if (
+    msg.includes('BidTooLow') ||
+    /#5\b/.test(msg) ||
+    /bid.{0,20}too.{0,10}low/i.test(msg) ||
+    /Contract error: BidTooLow/.test(msg)
+  ) {
     return {
       phase: 'error',
       kind: 'bid_too_low',
       message: 'Bid too low — your amount must exceed the current highest bid.',
     }
+  }
+
+  if (/Contract error: AuctionEnded/.test(msg)) {
+    return { phase: 'error', kind: 'other', message: 'This auction has already ended.' }
   }
 
   return { phase: 'error', kind: 'other', message: msg || 'Transaction failed. Please try again.' }

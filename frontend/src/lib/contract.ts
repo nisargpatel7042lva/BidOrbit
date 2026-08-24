@@ -112,7 +112,18 @@ export async function buildPlaceBidTx(publicKey: string, auctionId: bigint, amou
   // no XDR object parsing needed in the browser.
   const minFee = parseInt(sim.minResourceFee ?? '0', 10) + 100
 
-  return new TransactionBuilder(account, {
+  // The contract calls bidder.require_auth() and tok.transfer(&bidder, …).
+  // The simulation returns the required SorobanAuthorizationEntries in sim.auth.
+  // We must attach them to the operation — without them the contract's auth
+  // checks fail on-chain even though the tx envelope is signed.
+  const authEntries: xdr.SorobanAuthorizationEntry[] = (sim.auth ?? []).map(
+    (a: string) => xdr.SorobanAuthorizationEntry.fromXDR(a, 'base64'),
+  )
+
+  // Fresh Account — TransactionBuilder.build() mutates the account's sequence,
+  // so the first build() already incremented it. We need the original sequence here.
+  const account2 = new Account(publicKey, sequence)
+  return new TransactionBuilder(account2, {
     fee: String(minFee),
     networkPassphrase: NETWORK_PASSPHRASE,
   })
@@ -125,6 +136,7 @@ export async function buildPlaceBidTx(publicKey: string, auctionId: bigint, amou
           new Address(publicKey).toScVal(),
           nativeToScVal(amount, { type: 'i128' }),
         ],
+        auth: authEntries,
       }),
     )
     .setSorobanData(sim.transactionData)
@@ -145,8 +157,46 @@ export async function submitSignedTx(signedXdr: string): Promise<string> {
     await new Promise(r => setTimeout(r, 2_000))
     const poll = await rpcPost('getTransaction', { hash })
     if (poll.status === 'SUCCESS') return hash
-    if (poll.status === 'FAILED') throw new Error('Transaction failed on-chain')
+    if (poll.status === 'FAILED') {
+      // Try to extract the specific contract error from the Soroban meta.
+      const contractError = decodeSorobanError(poll.resultMetaXdr)
+      if (contractError) throw new Error(contractError)
+      const detail = poll.resultXdr ?? ''
+      throw new Error(`Transaction failed on-chain [${hash}]` + (detail ? ': ' + detail : ''))
+    }
   }
 
   throw new Error('Confirmation timeout — check stellar.expert for tx ' + hash)
+}
+
+function decodeSorobanError(resultMetaXdr: string | undefined): string | null {
+  if (!resultMetaXdr) return null
+  try {
+    const meta = xdr.TransactionMeta.fromXDR(resultMetaXdr, 'base64')
+    // v3 is the Soroban meta version
+    const sorobanMeta = (meta as any).v3?.()?.sorobanMeta?.()
+    if (!sorobanMeta) return null
+    const retVal = sorobanMeta.returnValue()
+    // Contract panics produce an ScError with type=contract and the error code
+    if (retVal.switch().name === 'scvError') {
+      const err = retVal.error()
+      const code: number = err.code?.().value ?? err.value?.()
+      const CONTRACT_ERRORS: Record<number, string> = {
+        1: 'InvalidStartPrice',
+        2: 'InvalidEndLedger',
+        3: 'AuctionNotFound',
+        4: 'AuctionEnded',
+        5: 'BidTooLow',
+        6: 'AuctionNotEnded',
+        7: 'NotHighestBidder',
+        8: 'AlreadyClaimed',
+        9: 'NotAdmin',
+        10: 'AlreadyWithdrawn',
+        11: 'NoBids',
+      }
+      const name = CONTRACT_ERRORS[code] ?? `ContractError(${code})`
+      return `Contract error: ${name}`
+    }
+  } catch { /* ignore parse failures */ }
+  return null
 }
