@@ -4,7 +4,6 @@ import { useAuction } from '../hooks/useAuction'
 import { usePlaceBid } from '../hooks/usePlaceBid'
 import { useWallet } from '../hooks/useWallet'
 
-const AUCTION_ID = 0n
 const EXPERT_BASE = 'https://stellar.expert/explorer/testnet/tx'
 
 /* ── Phase status pill ─────────────────────────────────── */
@@ -16,8 +15,8 @@ const PHASE_META = {
 
 export function BidForm() {
   const { address } = useWallet()
-  const { state, loading, error: fetchError, currentLedger, refetch } = useAuction(AUCTION_ID)
-  const { status, placeBid, reset } = usePlaceBid(AUCTION_ID, refetch)
+  const { auctionId, state, loading, error: fetchError, currentLedger, refetch } = useAuction()
+  const { status, placeBid, reset } = usePlaceBid(auctionId ?? 0n, refetch)
   const [input, setInput] = useState('')
   const [validationError, setValidationError] = useState<string | null>(null)
 
@@ -70,7 +69,7 @@ export function BidForm() {
           {/* badges row */}
           <div className="flex flex-wrap items-center gap-2 mb-3">
             <span className="border-2 border-black bg-white px-2 py-0.5 font-black text-[10px] uppercase tracking-[0.25em]">
-              AUCTION #0
+              AUCTION #{auctionId?.toString() ?? '…'}
             </span>
             {isEnded ? (
               <span className="border-2 border-black bg-black text-white px-2 py-0.5 font-black text-[10px] uppercase tracking-[0.25em]">

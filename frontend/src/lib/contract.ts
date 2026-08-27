@@ -50,6 +50,30 @@ async function rpcPost(method: string, params: Record<string, unknown>) {
   return json.result
 }
 
+export async function getAuctionCount(): Promise<bigint> {
+  const fakeAccount = new Account(SIM_SOURCE, '0')
+  const tx = new TransactionBuilder(fakeAccount, {
+    fee: '100',
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      Operation.invokeContractFunction({
+        contract: CONTRACT_ID,
+        function: 'auction_count',
+        args: [],
+      }),
+    )
+    .setTimeout(30)
+    .build()
+
+  const sim = await rpcPost('simulateTransaction', { transaction: tx.toXDR() })
+  if (sim.error) throw new Error(sim.error)
+  const retvalB64: string = sim.results?.[0]?.xdr
+  if (!retvalB64) return 0n
+  const retval = xdr.ScVal.fromXDR(retvalB64, 'base64')
+  return BigInt(scValToNative(retval) as number | string | bigint)
+}
+
 export async function getAuctionState(auctionId: bigint): Promise<AuctionState> {
   // Use a fake account — sequence is irrelevant for read-only simulation.
   const fakeAccount = new Account(SIM_SOURCE, '0')

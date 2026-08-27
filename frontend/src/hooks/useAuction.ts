@@ -1,10 +1,11 @@
 import { scValToNative } from '@stellar/stellar-sdk'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { CONTRACT_ID, type AuctionState, getAuctionState, server } from '../lib/contract'
+import { CONTRACT_ID, type AuctionState, getAuctionCount, getAuctionState, server } from '../lib/contract'
 
 export type { AuctionState }
 
-export function useAuction(auctionId: bigint) {
+export function useAuction() {
+  const [auctionId, setAuctionId] = useState<bigint | null>(null)
   const [state, setState] = useState<AuctionState | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -13,7 +14,15 @@ export function useAuction(auctionId: bigint) {
 
   const fetchState = useCallback(async () => {
     try {
-      const data = await getAuctionState(auctionId)
+      const count = await getAuctionCount()
+      if (count === 0n) {
+        setError('No auctions have been created yet.')
+        setLoading(false)
+        return
+      }
+      const latestId = count - 1n
+      setAuctionId(latestId)
+      const data = await getAuctionState(latestId)
       setState(data)
       setError(null)
     } catch (err) {
@@ -21,10 +30,10 @@ export function useAuction(auctionId: bigint) {
     } finally {
       setLoading(false)
     }
-  }, [auctionId])
+  }, [])
 
-  // Poll getEvents every 3s; refetch auction state when a BidPlaced for this
-  // auction appears so the UI updates live without a page refresh.
+  // Poll getEvents every 3s; refetch auction state when a BidPlaced event
+  // for the current auction appears so the UI updates live.
   const pollEvents = useCallback(async () => {
     try {
       const { sequence } = await server.getLatestLedger()
@@ -65,5 +74,5 @@ export function useAuction(auctionId: bigint) {
     return () => clearInterval(id)
   }, [fetchState, pollEvents])
 
-  return { state, loading, error, currentLedger, refetch: fetchState }
+  return { auctionId, state, loading, error, currentLedger, refetch: fetchState }
 }

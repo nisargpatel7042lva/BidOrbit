@@ -1,0 +1,45 @@
+name: Daily Auction
+
+on:
+  schedule:
+    - cron: '0 0 * * *'   # midnight UTC every day
+  workflow_dispatch:        # allow manual trigger from GitHub UI
+
+jobs:
+  create-auction:
+    name: Create Daily Auction
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install stellar-cli
+        run: |
+          curl -L --retry 3 \
+            https://github.com/stellar/stellar-cli/releases/download/v22.7.1/stellar-cli-x86_64-unknown-linux-gnu.tar.gz \
+            | tar xz
+          sudo mv stellar /usr/local/bin/stellar
+          stellar --version
+
+      - name: Get current ledger and compute end_ledger (+24 h)
+        id: ledger
+        run: |
+          CURRENT=$(curl -s -X POST https://soroban-testnet.stellar.org \
+            -H 'Content-Type: application/json' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"getLatestLedger","params":{}}' \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['result']['sequence'])")
+          echo "end_ledger=$((CURRENT + 17280))" >> "$GITHUB_OUTPUT"
+          echo "Current ledger: $CURRENT  →  end_ledger: $((CURRENT + 17280))"
+
+      - name: Create auction
+        env:
+          STELLAR_SECRET_KEY: ${{ secrets.STELLAR_ADMIN_SECRET }}
+        run: |
+          DATE=$(date -u '+%b %d, %Y')
+          stellar contract invoke \
+            --id CCKH2P2QFWDKQTUALSEZJRT5WWAJPFKT5DD56VQKFAFDGVXIXW2ZHBMQ \
+            --source-account GAYBYZIU42OOYIUDZTVUTXPLHWSFNN236PHXG6GFDCQTZVI5WZRCDLKQ \
+            --network testnet \
+            -- create_auction \
+            --admin GAYBYZIU42OOYIUDZTVUTXPLHWSFNN236PHXG6GFDCQTZVI5WZRCDLKQ \
+            --item_name "BidOrbit Daily Auction — $DATE" \
+            --start_price 10000000 \
+            --end_ledger ${{ steps.ledger.outputs.end_ledger }} \
+            --token CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC
