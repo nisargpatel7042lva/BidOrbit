@@ -10,7 +10,7 @@ A decentralised English auction dApp built on Stellar using Soroban smart contra
 
 ## Demo Video
 
-https://www.loom.com/share/placeholder — _replace with your 1–2 min walkthrough link_
+https://www.loom.com/share/c79cbb8bdf2d460ebff16556fa4947ef
 
 ## Features
 
@@ -225,4 +225,4 @@ BidOrbit/
 - [ ] Screenshot: mobile responsive UI _(add docs/screenshots/mobile-ui.png)_
 - [ ] Screenshot: CI pipeline green _(add docs/screenshots/ci-pipeline.png)_
 - [ ] Screenshot: test output _(add docs/screenshots/test-output.png)_
-- [ ] Demo video link _(replace placeholder above with Loom/YouTube link)_
+- [x] Demo video: https://www.loom.com/share/c79cbb8bdf2d460ebff16556fa4947ef
