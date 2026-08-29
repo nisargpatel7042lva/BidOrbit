@@ -15,16 +15,11 @@ jobs:
           set -e
           TAG=$(curl -sf https://api.github.com/repos/stellar/stellar-cli/releases/latest \
             | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])")
+          VER=${TAG#v}
           echo "Installing stellar-cli $TAG"
-          TMP=$(mktemp)
-          HTTP=$(curl -L --retry 3 -w "%{http_code}" -o "$TMP" \
-            "https://github.com/stellar/stellar-cli/releases/download/${TAG}/stellar-cli-x86_64-unknown-linux-gnu.tar.gz")
-          if [ "$HTTP" != "200" ]; then
-            echo "Download failed — HTTP $HTTP"; cat "$TMP"; exit 1
-          fi
-          tar xzf "$TMP"
-          sudo mv stellar /usr/local/bin/stellar
-          rm "$TMP"
+          curl -L --retry 3 -O \
+            "https://github.com/stellar/stellar-cli/releases/download/${TAG}/stellar-cli_${VER}_amd64.deb"
+          sudo dpkg -i "stellar-cli_${VER}_amd64.deb"
           stellar --version
 
       - name: Get current ledger and compute end_ledger (+24 h)
