@@ -39,7 +39,7 @@ jobs:
           DATE=$(date -u '+%b %d, %Y')
           stellar contract invoke \
             --id CCKH2P2QFWDKQTUALSEZJRT5WWAJPFKT5DD56VQKFAFDGVXIXW2ZHBMQ \
-            --source-account GAYBYZIU42OOYIUDZTVUTXPLHWSFNN236PHXG6GFDCQTZVI5WZRCDLKQ \
+            --source-account "$STELLAR_SECRET_KEY" \
             --network testnet \
             -- create_auction \
             --admin GAYBYZIU42OOYIUDZTVUTXPLHWSFNN236PHXG6GFDCQTZVI5WZRCDLKQ \
