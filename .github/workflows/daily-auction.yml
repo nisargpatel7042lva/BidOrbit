@@ -12,10 +12,19 @@ jobs:
     steps:
       - name: Install stellar-cli
         run: |
-          curl -L --retry 3 \
-            https://github.com/stellar/stellar-cli/releases/download/v22.7.1/stellar-cli-x86_64-unknown-linux-gnu.tar.gz \
-            | tar xz
+          set -e
+          TAG=$(curl -sf https://api.github.com/repos/stellar/stellar-cli/releases/latest \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])")
+          echo "Installing stellar-cli $TAG"
+          TMP=$(mktemp)
+          HTTP=$(curl -L --retry 3 -w "%{http_code}" -o "$TMP" \
+            "https://github.com/stellar/stellar-cli/releases/download/${TAG}/stellar-cli-x86_64-unknown-linux-gnu.tar.gz")
+          if [ "$HTTP" != "200" ]; then
+            echo "Download failed — HTTP $HTTP"; cat "$TMP"; exit 1
+          fi
+          tar xzf "$TMP"
           sudo mv stellar /usr/local/bin/stellar
+          rm "$TMP"
           stellar --version
 
       - name: Get current ledger and compute end_ledger (+24 h)
